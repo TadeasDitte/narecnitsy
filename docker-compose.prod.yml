@@ -12,16 +12,21 @@
 #   cp .env.example .env            # then fill in APP_KEY, DB_PASSWORD, etc.
 #   docker compose -f docker-compose.prod.yml pull
 #   docker compose -f docker-compose.prod.yml up -d
+#
+# Markets/history are seeded automatically by the `seed` service below - no
+# manual command needed after `up`. To re-run it later (e.g. after adding a
+# symbol to HYPERLIQUID_SYMBOLS), either use the "Backfill all markets"
+# button on the /market-data page, or:
 #   docker compose -f docker-compose.prod.yml exec app php artisan hyperliquid:backfill --all
 #
 # To build+run from local source instead (e.g. testing a change before it's
 # on main), use the plain Dockerfile directly - it has the same `app`
 # target this image is built from.
 #
-# Topology: one image (nginx + php-fpm together, see Dockerfile) run four
+# Topology: one image (nginx + php-fpm together, see Dockerfile) run five
 # ways - `app` serves HTTP, `queue`/`hyperliquid-stream` are singleton
-# background workers, `migrate` runs once per deploy and gates the other
-# three.
+# background workers, `migrate` and `seed` each run once per deploy and gate
+# the other three (postgres -> migrate -> seed -> app/queue/stream).
 
 x-app: &app
     image: ${GHCR_IMAGE:-ghcr.io/tadeasditte/narecnitsy}:${IMAGE_TAG:-latest}
@@ -41,7 +46,7 @@ x-app: &app
         HYPERLIQUID_NETWORK: ${HYPERLIQUID_NETWORK:-mainnet}
         HYPERLIQUID_SYMBOLS: ${HYPERLIQUID_SYMBOLS:-BTC,ETH,SOL,ARB,AVAX}
     depends_on:
-        migrate:
+        seed:
             condition: service_completed_successfully
     restart: unless-stopped
 
@@ -73,10 +78,27 @@ services:
             DB_DATABASE: ${DB_DATABASE:-narecnitsy}
             DB_USERNAME: ${DB_USERNAME:-narecnitsy}
             DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-        command: php artisan migrate --force
+        # On a brand-new volume, Postgres's healthcheck can pass against its
+        # transient initdb bootstrap server just before it restarts into the
+        # real one - a connection landing in that gap gets dropped. Retries
+        # absorb that one-time race instead of needing a manual `up` re-run.
+        command: sh -c 'for i in $$(seq 1 10); do php artisan migrate --force && exit 0; sleep 3; done; exit 1'
         depends_on:
             postgres:
                 condition: service_healthy
+
+    # Syncs tracked markets from Hyperliquid and queues a full historical
+    # backfill, once per deploy - this is what makes markets/history show
+    # up with no manual command needed. Reuses the *app anchor for its env
+    # (needs HYPERLIQUID_* and a working QUEUE_CONNECTION), but overrides
+    # `restart` since a one-shot job must not restart after it exits 0.
+    seed:
+        <<: *app
+        depends_on:
+            migrate:
+                condition: service_completed_successfully
+        command: php artisan hyperliquid:backfill --all
+        restart: 'no'
 
     # Serves the app on port 80 (nginx + php-fpm together in one
     # container - see Dockerfile). Stateless - safe to scale horizontally.

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
     Card,
     CardContent,
@@ -9,7 +11,7 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { index as marketDataIndex } from '@/routes/market-data';
+import { backfill, index as marketDataIndex } from '@/routes/market-data';
 import type { Candle, MarketSummary } from '@/types';
 
 const props = defineProps<{
@@ -49,16 +51,41 @@ const selectInterval = (event: Event) => {
 };
 
 const formatTime = (ms: number) => new Date(ms).toLocaleString();
+
+const backfilling = ref(false);
+
+const triggerBackfill = () => {
+    backfilling.value = true;
+    router.post(
+        backfill.url(),
+        {},
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                backfilling.value = false;
+            },
+        },
+    );
+};
 </script>
 
 <template>
     <Head title="Market data" />
 
     <div class="flex flex-1 flex-col gap-6 p-4">
-        <Heading
-            title="Market data"
-            description="What this app has ingested from Hyperliquid so far."
-        />
+        <div class="flex items-start justify-between gap-4">
+            <Heading
+                title="Market data"
+                description="What this app has ingested from Hyperliquid so far."
+            />
+            <Button
+                variant="outline"
+                :disabled="backfilling"
+                @click="triggerBackfill"
+            >
+                {{ backfilling ? 'Queuing...' : 'Backfill all markets' }}
+            </Button>
+        </div>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Card
@@ -101,9 +128,9 @@ const formatTime = (ms: number) => new Date(ms).toLocaleString();
                 v-if="!markets.length"
                 class="text-muted-foreground col-span-full text-sm"
             >
-                No markets tracked yet. Run
-                <code>php artisan hyperliquid:backfill --all</code>
-                to seed them.
+                No markets tracked yet. Click "Backfill all markets" above, or
+                run
+                <code>php artisan hyperliquid:backfill --all</code>.
             </div>
         </div>
 

@@ -2,13 +2,13 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\Hyperliquid\QueueBackfillForAllMarkets;
+use App\Actions\Hyperliquid\SyncTrackedMarkets;
 use App\Jobs\BackfillCandlesJob;
 use App\Models\Market;
-use App\Services\Hyperliquid\HyperliquidClient;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 
 class HyperliquidBackfill extends Command
 {
@@ -21,87 +21,43 @@ class HyperliquidBackfill extends Command
 
     protected $description = 'Backfill historical OHLCV candles from Hyperliquid into the candles table';
 
-    public function handle(HyperliquidClient $client): int
-    {
-        $this->syncMarkets($client);
-
-        try {
-            $pairs = $this->resolvePairs();
-        } catch (ModelNotFoundException) {
-            $this->error("Unknown or untracked symbol: {$this->argument('symbol')}");
-
-            return self::FAILURE;
-        }
-
-        if ($pairs->isEmpty()) {
-            $this->error('Nothing to backfill. Pass a symbol + interval, or use --all.');
-
-            return self::FAILURE;
-        }
-
-        $fromMs = Carbon::parse($this->option('from') ?? config('hyperliquid.backfill.default_from'))->getTimestampMs();
-        $toMs = Carbon::parse($this->option('to') ?? 'now')->getTimestampMs();
-
-        foreach ($pairs as [$market, $interval]) {
-            BackfillCandlesJob::dispatch($market->id, $interval, $fromMs, $toMs);
-            $this->info("Queued backfill: {$market->symbol} {$interval}");
-        }
-
-        return self::SUCCESS;
-    }
-
-    /**
-     * Seed/refresh Market rows for every tracked symbol from Hyperliquid's meta endpoint.
-     */
-    private function syncMarkets(HyperliquidClient $client): void
-    {
-        $trackedSymbols = config('hyperliquid.symbols');
-        $universe = $client->meta()['universe'] ?? [];
-
-        foreach ($universe as $entry) {
-            if (! in_array($entry['name'], $trackedSymbols, true)) {
-                continue;
-            }
-
-            Market::updateOrCreate(
-                ['symbol' => $entry['name']],
-                [
-                    'sz_decimals' => $entry['szDecimals'] ?? null,
-                    'max_leverage' => $entry['maxLeverage'] ?? null,
-                    'metadata' => $entry,
-                ],
-            );
-        }
-    }
-
-    /**
-     * @return Collection<int, array{Market, string}>
-     */
-    private function resolvePairs(): Collection
+    public function handle(SyncTrackedMarkets $syncTrackedMarkets, QueueBackfillForAllMarkets $queueBackfillForAllMarkets): int
     {
         $symbol = $this->argument('symbol');
         $interval = $this->argument('interval');
 
         if ($symbol && $interval) {
-            $market = Market::where('symbol', $symbol)->firstOrFail();
+            $syncTrackedMarkets();
 
-            return collect([[$market, $interval]]);
-        }
+            try {
+                $market = Market::where('symbol', $symbol)->firstOrFail();
+            } catch (ModelNotFoundException) {
+                $this->error("Unknown or untracked symbol: {$symbol}");
 
-        if (! $this->option('all')) {
-            return collect();
-        }
-
-        $markets = Market::active()->whereIn('symbol', config('hyperliquid.symbols'))->get();
-
-        $pairs = collect();
-
-        foreach ($markets as $market) {
-            foreach (config('hyperliquid.intervals') as $trackedInterval) {
-                $pairs->push([$market, $trackedInterval]);
+                return self::FAILURE;
             }
+
+            $fromMs = Carbon::parse($this->option('from') ?? config('hyperliquid.backfill.default_from'))->getTimestampMs();
+            $toMs = Carbon::parse($this->option('to') ?? 'now')->getTimestampMs();
+
+            BackfillCandlesJob::dispatch($market->id, $interval, $fromMs, $toMs);
+            $this->info("Queued backfill: {$market->symbol} {$interval}");
+
+            return self::SUCCESS;
         }
 
-        return $pairs;
+        if ($this->option('all')) {
+            $fromMs = $this->option('from') ? Carbon::parse($this->option('from'))->getTimestampMs() : null;
+            $toMs = $this->option('to') ? Carbon::parse($this->option('to'))->getTimestampMs() : null;
+
+            $queued = $queueBackfillForAllMarkets($fromMs, $toMs);
+            $this->info("Queued {$queued} symbol/interval backfills.");
+
+            return self::SUCCESS;
+        }
+
+        $this->error('Nothing to backfill. Pass a symbol + interval, or use --all.');
+
+        return self::FAILURE;
     }
 }

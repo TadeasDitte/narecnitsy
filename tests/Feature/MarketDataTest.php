@@ -1,8 +1,11 @@
 <?php
 
+use App\Jobs\BackfillCandlesJob;
 use App\Models\Candle;
 use App\Models\Market;
 use App\Models\User;
+use App\Services\Hyperliquid\HyperliquidClient;
+use Illuminate\Support\Facades\Queue;
 
 test('guests are redirected to the login page', function () {
     $response = $this->get(route('market-data.index'));
@@ -44,4 +47,25 @@ test('it shows ingested markets and candles for the selected symbol', function (
         ->has('markets', 1)
         ->has('candles', 1)
     );
+});
+
+test('users can trigger a backfill of all tracked markets from the page', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Queue::fake();
+
+    $this->mock(HyperliquidClient::class, function ($mock) {
+        $mock->shouldReceive('meta')->once()->andReturn([
+            'universe' => [
+                ['name' => 'BTC', 'szDecimals' => 5, 'maxLeverage' => 40],
+            ],
+        ]);
+    });
+
+    $response = $this->post(route('market-data.backfill'));
+
+    $response->assertRedirect();
+    expect(Market::where('symbol', 'BTC')->exists())->toBeTrue();
+    Queue::assertPushed(BackfillCandlesJob::class, count(config('hyperliquid.intervals')));
 });

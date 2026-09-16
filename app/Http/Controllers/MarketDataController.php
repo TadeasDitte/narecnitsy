@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Hyperliquid\QueueBackfillForAllMarkets;
 use App\Models\Candle;
 use App\Models\Market;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
@@ -50,5 +52,17 @@ class MarketDataController extends Controller
             'selectedInterval' => $selectedInterval,
             'candles' => $candles,
         ]);
+    }
+
+    public function backfill(QueueBackfillForAllMarkets $queueBackfillForAllMarkets): RedirectResponse
+    {
+        $queued = $queueBackfillForAllMarkets();
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => "Queued {$queued} symbol/interval backfills - candles will fill in over the next few minutes.",
+        ]);
+
+        return back();
     }
 }
