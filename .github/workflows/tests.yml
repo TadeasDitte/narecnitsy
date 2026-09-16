@@ -65,15 +65,12 @@ jobs:
         run: composer ci:check
 
   docker:
-    name: Build and push (${{ matrix.target }})
+    name: Build and push
     runs-on: ubuntu-latest
     needs: ci
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        target: [app, nginx]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -94,7 +91,7 @@ jobs:
       # the repo's actual casing, so it can't be used directly.
       - name: Compute image name
         id: image
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}/${{ matrix.target }}" >> "$GITHUB_OUTPUT"
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}/app" >> "$GITHUB_OUTPUT"
 
       - name: Extract metadata
         id: meta
@@ -109,11 +106,11 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          target: ${{ matrix.target }}
+          target: app
           # Every push/PR gets a full build, as a check that the image
           # still builds - only a push to main actually publishes it.
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.target }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

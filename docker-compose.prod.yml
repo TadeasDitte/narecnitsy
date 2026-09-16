@@ -2,10 +2,10 @@
 # (`php artisan sail:install`) - this file is not meant to be run side by
 # side with it.
 #
-# Images are built and published to GHCR by .github/workflows/tests.yml (the
-# `docker` job) on every push to main - this file only ever pulls, it never
-# builds. That means `docker compose ... pull` needs to be authenticated
-# against ghcr.io first if the package is private:
+# The image is built and published to GHCR by .github/workflows/tests.yml
+# (the `docker` job) on every push to main - this file only ever pulls, it
+# never builds. That means `docker compose ... pull` needs to be
+# authenticated against ghcr.io first if the package is private:
 #   echo $GITHUB_TOKEN | docker login ghcr.io -u <github-username> --password-stdin
 #
 # Usage:
@@ -15,12 +15,13 @@
 #   docker compose -f docker-compose.prod.yml exec app php artisan hyperliquid:backfill --all
 #
 # To build+run from local source instead (e.g. testing a change before it's
-# on main), use the plain Dockerfile directly rather than this file - it has
-# the same `app`/`nginx` targets these images are built from.
+# on main), use the plain Dockerfile directly - it has the same `app`
+# target this image is built from.
 #
-# Topology: nginx -> app (PHP-FPM) -> postgres, plus two singleton workers
-# (queue, hyperliquid-stream) that share the same image as `app` but run a
-# different command. `migrate` runs once per deploy and gates the rest.
+# Topology: one image (nginx + php-fpm together, see Dockerfile) run four
+# ways - `app` serves HTTP, `queue`/`hyperliquid-stream` are singleton
+# background workers, `migrate` runs once per deploy and gates the other
+# three.
 
 x-app: &app
     image: ${GHCR_IMAGE:-ghcr.io/tadeasditte/narecnitsy}/app:${IMAGE_TAG:-latest}
@@ -77,19 +78,12 @@ services:
             postgres:
                 condition: service_healthy
 
-    # Serves the app. Stateless - safe to scale horizontally.
+    # Serves the app on port 80 (nginx + php-fpm together in one
+    # container - see Dockerfile). Stateless - safe to scale horizontally.
     app:
         <<: *app
-
-    # Static files + reverse proxy to app:9000. The only service exposed to
-    # the host.
-    nginx:
-        image: ${GHCR_IMAGE:-ghcr.io/tadeasditte/narecnitsy}/nginx:${IMAGE_TAG:-latest}
         ports:
             - '${APP_PORT:-80}:80'
-        depends_on:
-            - app
-        restart: unless-stopped
 
     # Processes BackfillCandlesJob/UpsertCandleJob. Safe to scale - the
     # rate-limit budget in HyperliquidClient is shared via the database

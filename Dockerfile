@@ -1,15 +1,16 @@
 # syntax=docker/dockerfile:1
 #
 # Production image only. Local development stays on Laravel Sail - see
-# `php artisan sail:install`. Building this produces two things from the
-# `build` stage below: a `app` (PHP-FPM) image and a `nginx` image, selected
-# via `docker compose --file docker-compose.prod.yml build` (see that file's
-# `target:` per service).
+# `php artisan sail:install`. One image comes out of this: `app`, an
+# all-in-one container running nginx + php-fpm together (via supervisord)
+# on port 80. The same image is reused for the queue/hyperliquid-stream/
+# migrate services in docker-compose.prod.yml - they just override the
+# command to run a single artisan process instead of supervisord.
 
 ########################################################################
 # 1. build - installs Composer + npm dependencies and compiles the
 #    Vite/Inertia frontend. Nothing from this stage ships in the final
-#    images below except the `vendor/` and `public/build/` it produces.
+#    image except the `vendor/` and `public/build/` it produces.
 ########################################################################
 FROM php:8.4-cli-alpine AS build
 
@@ -42,17 +43,22 @@ RUN npm ci
 RUN npm run build
 
 ########################################################################
-# 2. app - a slim PHP-FPM runtime with only the compiled application.
+# 2. app - nginx + php-fpm in one container, run under supervisord.
 ########################################################################
 FROM php:8.4-fpm-alpine AS app
 
-RUN apk add --no-cache postgresql-libs \
+RUN apk add --no-cache postgresql-libs nginx supervisor \
     && curl -sSf https://raw.githubusercontent.com/mlocati/docker-php-extension-installer/master/install-php-extensions -o /usr/local/bin/install-php-extensions \
     && chmod +x /usr/local/bin/install-php-extensions \
     && install-php-extensions pdo_pgsql mbstring bcmath opcache pcntl \
-    && rm /usr/local/bin/install-php-extensions
+    && rm /usr/local/bin/install-php-extensions \
+    && mkdir -p /run/nginx
 
 COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
+COPY docker/nginx/default.conf /etc/nginx/http.d/default.conf
+COPY docker/supervisord.conf /etc/supervisord.conf
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 WORKDIR /var/www/html
 
@@ -62,16 +68,10 @@ COPY --from=build /app/public/build ./public/build
 
 RUN chown -R www-data:www-data storage bootstrap/cache
 
-USER www-data
+# Stays root: nginx's master process needs to bind port 80, and php-fpm's
+# master process needs to be root to drop its workers to www-data itself
+# (both happen automatically - supervisord just launches them).
+ENTRYPOINT ["entrypoint.sh"]
+CMD ["supervisord", "-c", "/etc/supervisord.conf"]
 
-EXPOSE 9000
-CMD ["php-fpm"]
-
-########################################################################
-# 3. nginx - serves static files and proxies PHP requests to `app:9000`.
-#    Built from the same compiled public/ as the app stage above.
-########################################################################
-FROM nginx:1.27-alpine AS nginx
-
-COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/public /var/www/html/public
+EXPOSE 80
