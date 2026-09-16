@@ -247,41 +247,346 @@ const apiOrigin = window.location.origin;
 
         <Card>
             <CardHeader>
-                <CardTitle>Endpoints</CardTitle>
-                <CardDescription>
-                    Read-only, authenticated with a bot token from above.
-                </CardDescription>
+                <CardTitle>Authentication</CardTitle>
+                <CardDescription
+                    >Every request below needs a bot token from
+                    above.</CardDescription
+                >
+            </CardHeader>
+            <CardContent class="space-y-2 text-sm">
+                <p class="text-muted-foreground">
+                    Send it as a bearer token. There's no separate API key
+                    header - the token itself is the credential, and it
+                    authenticates as your account.
+                </p>
+                <pre
+                    class="bg-muted overflow-x-auto rounded-md p-3"
+                ><code>Authorization: Bearer &lt;token&gt;</code></pre>
+                <p class="text-muted-foreground">
+                    Base URL:
+                    <code class="text-foreground">{{ apiOrigin }}</code>
+                </p>
+            </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader>
+                <CardTitle>GET /api/markets</CardTitle>
+                <CardDescription
+                    >Every actively tracked market.</CardDescription
+                >
             </CardHeader>
             <CardContent class="space-y-4 text-sm">
                 <div>
-                    <p class="font-medium">GET /api/markets</p>
-                    <p class="text-muted-foreground">
-                        Every actively tracked market:
-                        <code>id</code>, <code>symbol</code>,
-                        <code>sz_decimals</code>, <code>max_leverage</code>.
-                    </p>
-                    <pre
-                        class="bg-muted mt-2 overflow-x-auto rounded-md p-3"
-                    ><code>curl -H "Authorization: Bearer &lt;token&gt;" \
-  {{ apiOrigin }}/api/markets</code></pre>
+                    <p class="mb-2 font-medium">Response fields</p>
+                    <div class="overflow-x-auto rounded-md border">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr
+                                    class="text-muted-foreground border-b text-left"
+                                >
+                                    <th class="px-3 py-2 font-medium">Field</th>
+                                    <th class="px-3 py-2 font-medium">Type</th>
+                                    <th class="px-3 py-2 font-medium">
+                                        Description
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>id</code>
+                                    </td>
+                                    <td class="px-3 py-2">integer</td>
+                                    <td class="px-3 py-2">
+                                        Use this as <code>market_id</code> if
+                                        you need to cross-reference elsewhere.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>symbol</code>
+                                    </td>
+                                    <td class="px-3 py-2">string</td>
+                                    <td class="px-3 py-2">
+                                        Coin ticker, e.g. <code>BTC</code>. Pass
+                                        this to <code>/api/candles</code>.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>sz_decimals</code>
+                                    </td>
+                                    <td class="px-3 py-2">integer | null</td>
+                                    <td class="px-3 py-2">
+                                        Size decimals Hyperliquid uses for this
+                                        asset.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>max_leverage</code>
+                                    </td>
+                                    <td class="px-3 py-2">integer | null</td>
+                                    <td class="px-3 py-2">
+                                        Max leverage Hyperliquid allows for this
+                                        asset.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div>
-                    <p class="font-medium">GET /api/candles</p>
-                    <p class="text-muted-foreground">
-                        OHLCV history for one market. Query params:
-                        <code>symbol</code> (required, e.g.
-                        <code>{{ exampleSymbol }}</code
-                        >), <code>interval</code> (required, one of
-                        {{ intervals.join(', ') }}), optional
-                        <code>from</code>/<code>to</code> (epoch milliseconds).
-                        Capped at 5000 rows per request.
+                    <p class="mb-2 font-medium">Example</p>
+                    <pre
+                        class="bg-muted overflow-x-auto rounded-md p-3"
+                    ><code>curl -H "Authorization: Bearer &lt;token&gt;" \
+  {{ apiOrigin }}/api/markets</code></pre>
+                    <pre
+                        class="bg-muted mt-2 overflow-x-auto rounded-md p-3"
+                    ><code>[
+  {
+    "id": 2,
+    "symbol": "BTC",
+    "sz_decimals": 5,
+    "max_leverage": 40
+  },
+  {
+    "id": 1,
+    "symbol": "SOL",
+    "sz_decimals": 2,
+    "max_leverage": 10
+  }
+]</code></pre>
+                </div>
+            </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader>
+                <CardTitle>GET /api/candles</CardTitle>
+                <CardDescription>OHLCV history for one market.</CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-4 text-sm">
+                <div>
+                    <p class="mb-2 font-medium">Query parameters</p>
+                    <div class="overflow-x-auto rounded-md border">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr
+                                    class="text-muted-foreground border-b text-left"
+                                >
+                                    <th class="px-3 py-2 font-medium">Param</th>
+                                    <th class="px-3 py-2 font-medium">
+                                        Required
+                                    </th>
+                                    <th class="px-3 py-2 font-medium">
+                                        Description
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>symbol</code>
+                                    </td>
+                                    <td class="px-3 py-2">Yes</td>
+                                    <td class="px-3 py-2">
+                                        A tracked market's symbol, e.g.
+                                        <code>{{ exampleSymbol }}</code
+                                        >. 404s if unknown.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>interval</code>
+                                    </td>
+                                    <td class="px-3 py-2">Yes</td>
+                                    <td class="px-3 py-2">
+                                        One of:
+                                        <code
+                                            v-for="(
+                                                interval, index
+                                            ) in intervals"
+                                            :key="interval"
+                                            >{{ interval
+                                            }}{{
+                                                index < intervals.length - 1
+                                                    ? ', '
+                                                    : ''
+                                            }}</code
+                                        >.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>from</code>
+                                    </td>
+                                    <td class="px-3 py-2">No</td>
+                                    <td class="px-3 py-2">
+                                        Epoch milliseconds. Defaults to the
+                                        beginning of time (all stored rows).
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>to</code>
+                                    </td>
+                                    <td class="px-3 py-2">No</td>
+                                    <td class="px-3 py-2">
+                                        Epoch milliseconds. Defaults to now.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted-foreground mt-2">
+                        Rows are ordered oldest -> newest by
+                        <code>open_time</code>, capped at 5000 rows per request
+                        - page through a long range with repeated
+                        <code>from</code>/<code>to</code> calls.
+                    </p>
+                </div>
+
+                <div>
+                    <p class="mb-2 font-medium">Response fields</p>
+                    <div class="overflow-x-auto rounded-md border">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr
+                                    class="text-muted-foreground border-b text-left"
+                                >
+                                    <th class="px-3 py-2 font-medium">Field</th>
+                                    <th class="px-3 py-2 font-medium">Type</th>
+                                    <th class="px-3 py-2 font-medium">
+                                        Description
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>open_time</code> /
+                                        <code>close_time</code>
+                                    </td>
+                                    <td class="px-3 py-2">integer</td>
+                                    <td class="px-3 py-2">
+                                        Epoch milliseconds.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>open</code> / <code>high</code> /
+                                        <code>low</code> / <code>close</code> /
+                                        <code>volume</code>
+                                    </td>
+                                    <td class="px-3 py-2">string</td>
+                                    <td class="px-3 py-2">
+                                        Decimal strings (8 places) - deserialize
+                                        as a decimal type, not a float, to avoid
+                                        rounding drift.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>num_trades</code>
+                                    </td>
+                                    <td class="px-3 py-2">integer | null</td>
+                                    <td class="px-3 py-2">
+                                        Trade count Hyperliquid reported for the
+                                        candle, when available.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2">
+                                        <code>is_closed</code>
+                                    </td>
+                                    <td class="px-3 py-2">boolean</td>
+                                    <td class="px-3 py-2">
+                                        <code>false</code> means the candle is
+                                        still forming - its OHLCV values will
+                                        keep changing on later requests until
+                                        <code>close_time</code> passes.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="mb-2 font-medium">Example</p>
+                    <pre
+                        class="bg-muted overflow-x-auto rounded-md p-3"
+                    ><code>curl -H "Authorization: Bearer &lt;token&gt;" \
+  "{{ apiOrigin }}/api/candles?symbol={{ exampleSymbol }}&interval={{ exampleInterval }}&from=1758000000000"</code></pre>
+                    <pre
+                        class="bg-muted mt-2 overflow-x-auto rounded-md p-3"
+                    ><code>[
+  {
+    "id": 57311,
+    "market_id": 2,
+    "interval": "1h",
+    "open_time": 1789549200000,
+    "close_time": 1789552799999,
+    "open": "76145.00000000",
+    "high": "76457.00000000",
+    "low": "76018.00000000",
+    "close": "76457.00000000",
+    "volume": "1.42513000",
+    "num_trades": 816,
+    "is_closed": true,
+    "created_at": "2026-09-16T10:55:19.000000Z",
+    "updated_at": "2026-09-16T10:55:19.000000Z"
+  }
+]</code></pre>
+                </div>
+            </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader>
+                <CardTitle>Errors</CardTitle>
+                <CardDescription
+                    >Standard Laravel JSON error shapes - nothing
+                    endpoint-specific.</CardDescription
+                >
+            </CardHeader>
+            <CardContent class="space-y-4 text-sm">
+                <div>
+                    <p class="font-medium">401 - missing or revoked token</p>
+                    <pre
+                        class="bg-muted mt-2 overflow-x-auto rounded-md p-3"
+                    ><code>{ "message": "Unauthenticated." }</code></pre>
+                </div>
+                <div>
+                    <p class="font-medium">404 - unknown <code>symbol</code></p>
+                    <pre
+                        class="bg-muted mt-2 overflow-x-auto rounded-md p-3"
+                    ><code>{ "message": "No query results for model [App\\Models\\Market]." }</code></pre>
+                </div>
+                <div>
+                    <p class="font-medium">
+                        422 - missing/invalid query parameters
                     </p>
                     <pre
                         class="bg-muted mt-2 overflow-x-auto rounded-md p-3"
-                    ><code>curl -H "Authorization: Bearer &lt;token&gt;" \
-  "{{ apiOrigin }}/api/candles?symbol={{ exampleSymbol }}&interval={{ exampleInterval }}"</code></pre>
+                    ><code>{
+  "message": "The interval field is required.",
+  "errors": {
+    "interval": ["The interval field is required."]
+  }
+}</code></pre>
                 </div>
+                <p class="text-muted-foreground">
+                    There's no rate limiting on these endpoints today - be a
+                    good neighbor to yourself and don't hammer
+                    <code>/api/candles</code> in a tight loop; poll on an
+                    interval that matches how often the underlying data actually
+                    changes.
+                </p>
             </CardContent>
         </Card>
     </div>
