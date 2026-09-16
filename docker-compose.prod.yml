@@ -24,7 +24,7 @@
 # three.
 
 x-app: &app
-    image: ${GHCR_IMAGE:-ghcr.io/tadeasditte/narecnitsy}/app:${IMAGE_TAG:-latest}
+    image: ${GHCR_IMAGE:-ghcr.io/tadeasditte/narecnitsy}:${IMAGE_TAG:-latest}
     env_file: .env
     environment:
         APP_ENV: production
@@ -64,7 +64,7 @@ services:
     # Runs the migrations once, then exits. app/queue/hyperliquid-stream all
     # wait for this to finish successfully before they start.
     migrate:
-        image: ${GHCR_IMAGE:-ghcr.io/tadeasditte/narecnitsy}/app:${IMAGE_TAG:-latest}
+        image: ${GHCR_IMAGE:-ghcr.io/tadeasditte/narecnitsy}:${IMAGE_TAG:-latest}
         env_file: .env
         environment:
             DB_CONNECTION: pgsql

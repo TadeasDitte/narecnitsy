@@ -91,7 +91,7 @@ jobs:
       # the repo's actual casing, so it can't be used directly.
       - name: Compute image name
         id: image
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}/app" >> "$GITHUB_OUTPUT"
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Extract metadata
         id: meta
