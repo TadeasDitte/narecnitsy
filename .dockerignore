@@ -1,0 +1,29 @@
+# Rebuilt inside the image - never trust a copy from the host. In
+# particular, a locally cached bootstrap/cache/packages.php can reference
+# dev-only packages (e.g. laravel/boost) that don't exist in a --no-dev
+# install and would crash artisan on boot.
+/vendor
+/node_modules
+/public/build
+/public/hot
+/bootstrap/cache/*.php
+
+# Never bake secrets or local state into an image.
+.env
+.env.*
+!.env.example
+/database/*.sqlite*
+
+# Irrelevant to the build, just bloats context/cache invalidation.
+.git
+.github
+.claude
+.idea
+.vscode
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+/tests
+/docker-compose*.yml
+/Dockerfile

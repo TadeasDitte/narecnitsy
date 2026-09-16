@@ -1,0 +1,104 @@
+# Production stack only. For local development, use Laravel Sail instead
+# (`php artisan sail:install`) - this file is not meant to be run side by
+# side with it.
+#
+# Usage:
+#   cp .env.example .env            # then fill in APP_KEY, DB_PASSWORD, etc.
+#   docker compose -f docker-compose.prod.yml up --build -d
+#   docker compose -f docker-compose.prod.yml exec app php artisan hyperliquid:backfill --all
+#
+# Topology: nginx -> app (PHP-FPM) -> postgres, plus two singleton workers
+# (queue, hyperliquid-stream) that share the same image as `app` but run a
+# different command. `migrate` runs once per deploy and gates the rest.
+
+x-app: &app
+  build:
+    context: .
+    target: app
+  env_file: .env
+  environment:
+    APP_ENV: production
+    LOG_CHANNEL: stderr # so `docker compose logs` shows Laravel's log output
+    DB_CONNECTION: pgsql
+    DB_HOST: postgres
+    DB_PORT: 5432
+    DB_DATABASE: ${DB_DATABASE:-narecnitsy}
+    DB_USERNAME: ${DB_USERNAME:-narecnitsy}
+    DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    SESSION_DRIVER: database
+    CACHE_STORE: database
+    QUEUE_CONNECTION: database
+    HYPERLIQUID_NETWORK: ${HYPERLIQUID_NETWORK:-mainnet}
+    HYPERLIQUID_SYMBOLS: ${HYPERLIQUID_SYMBOLS:-BTC,ETH,SOL,ARB,AVAX}
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-narecnitsy}
+      POSTGRES_USER: ${DB_USERNAME:-narecnitsy}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME:-narecnitsy}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Runs the migrations once, then exits. app/queue/hyperliquid-stream all
+  # wait for this to finish successfully before they start.
+  migrate:
+    build:
+      context: .
+      target: app
+    env_file: .env
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-narecnitsy}
+      DB_USERNAME: ${DB_USERNAME:-narecnitsy}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    command: php artisan migrate --force
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Serves the app. Stateless - safe to scale horizontally.
+  app:
+    <<: *app
+
+  # Static files + reverse proxy to app:9000. The only service exposed to
+  # the host.
+  nginx:
+    build:
+      context: .
+      target: nginx
+    ports:
+      - '${APP_PORT:-80}:80'
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  # Processes BackfillCandlesJob/UpsertCandleJob. Safe to scale - the
+  # rate-limit budget in HyperliquidClient is shared via the database
+  # regardless of how many of these are running.
+  queue:
+    <<: *app
+    command: php artisan queue:work --tries=5 --max-time=3600
+
+  # Holds the single live WebSocket connection to Hyperliquid. Do NOT scale
+  # this beyond one replica - two instances would double-subscribe and
+  # double-write every live candle.
+  hyperliquid-stream:
+    <<: *app
+    command: php artisan hyperliquid:stream
+
+volumes:
+  postgres_data:
