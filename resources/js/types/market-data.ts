@@ -24,3 +24,22 @@ export type ApiToken = {
     created_at_diff: string | null;
     last_used_at_diff: string | null;
 };
+
+export type DashboardStats = {
+    active_markets: number;
+    total_candles: number;
+    tracked_intervals: number;
+    last_update_diff: string | null;
+};
+
+export type DashboardMarket = {
+    symbol: string;
+    last_price: string | null;
+    change_pct: number | null;
+    series: number[];
+};
+
+export type PricePoint = {
+    t: number;
+    v: number;
+};

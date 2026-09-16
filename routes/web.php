@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ApiAccessController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MarketDataController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -14,7 +15,7 @@ Route::get('/', function (Request $request) {
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('market-data', [MarketDataController::class, 'index'])->name('market-data.index');
     Route::post('market-data/backfill', [MarketDataController::class, 'backfill'])->name('market-data.backfill');

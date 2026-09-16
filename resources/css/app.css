@@ -114,6 +114,9 @@
     --chart-3: hsl(197 37% 24%);
     --chart-4: hsl(43 74% 66%);
     --chart-5: hsl(27 87% 67%);
+    --chart-accent: #2a78d6;
+    --status-good: #0ca30c;
+    --status-critical: #d03b3b;
     --radius: 0.5rem;
     --sidebar-background: hsl(0 0% 98%);
     --sidebar-foreground: hsl(240 5.3% 26.1%);
@@ -151,6 +154,9 @@
     --chart-3: hsl(30 80% 55%);
     --chart-4: hsl(280 65% 60%);
     --chart-5: hsl(340 75% 55%);
+    --chart-accent: #3987e5;
+    --status-good: #0ca30c;
+    --status-critical: #d03b3b;
     --sidebar-background: hsl(0 0% 7%);
     --sidebar-foreground: hsl(0 0% 95.9%);
     --sidebar-primary: hsl(360, 100%, 100%);
